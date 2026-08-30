@@ -68,8 +68,9 @@
     border-color:var(--stamp);
     background:#F3E7E1;
   }
-  .drop input{
-    position:absolute; inset:0; opacity:0; cursor:pointer;
+  .drop:focus-visible{
+    outline:2px solid var(--stamp);
+    outline-offset:2px;
   }
   .drop-icon{
     width:34px; height:44px;
@@ -172,12 +173,12 @@
     <h1>Satukan PDF, hilangkan<br>spasi kosong.</h1>
     <p class="lede">Jalan langsung di browser ini — tidak ada yang diunggah ke server mana pun. Cocok untuk PDF hasil download kantor yang terpotong 2–3 halaman padahal aslinya cuma 1 halaman.</p>
 
-    <label class="drop" id="drop">
-      <input type="file" id="fileInput" accept="application/pdf" multiple>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Pilih atau taruh file PDF">
+      <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
       <div class="drop-icon"><span class="page"></span><span class="page"></span></div>
       <div class="drop-title">Taruh file PDF di sini, atau klik untuk pilih</div>
       <div class="drop-sub">Bisa banyak file sekaligus · halaman ditumpuk otomatis</div>
-    </label>
+    </div>
 
     <div class="layout-row">
       <span>Mode:</span>
@@ -224,6 +225,10 @@ const layoutSelect = document.getElementById('layoutMode');
 ['dragleave','drop'].forEach(ev =>
   dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.remove('drag'); })
 );
+dropEl.addEventListener('click', () => fileInput.click());
+dropEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fileInput.click(); }
+});
 dropEl.addEventListener('drop', e => {
   const files = [...e.dataTransfer.files].filter(f => f.type === 'application/pdf');
   handleFiles(files);
