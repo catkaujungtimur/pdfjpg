@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>pdf2a4 — PDF jadi satu lembar A4</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
     --paper: #F7F5F0;
@@ -190,12 +190,19 @@
     <div class="queue" id="queue"></div>
 
     <footer>
-      <span class="stamp-mark">pdf2a4</span> &nbsp;Dibuat sebagai alat bantu yang tidak penting, untuk mengerjakan sesuatu yang juga tidak penting. satu link untuk semua komputer.
+      <span class="stamp-mark">pdf2a4</span> &nbsp;Dibuat sebagai pendamping script Python <code>pdf2a4.py</code> di repo yang sama. Bebas di-host lewat GitHub Pages, satu link untuk semua komputer.
     </footer>
   </div>
 
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
+if (typeof pdfjsLib === 'undefined') {
+  document.getElementById('drop').outerHTML =
+    '<div class="drop" style="cursor:default;border-color:var(--stamp);background:#F3E7E1;">' +
+    '<div class="drop-title" style="color:var(--stamp-ink)">Gagal memuat komponen PDF dari CDN.</div>' +
+    '<div class="drop-sub">Coba refresh halaman, atau periksa koneksi internet.</div></div>';
+  throw new Error('pdfjsLib gagal dimuat dari CDN');
+}
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 const DPI = 200;
 const A4_W = Math.round(8.27 * DPI);
