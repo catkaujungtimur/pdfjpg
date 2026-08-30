@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pdf2a4 — PDF jadi satu lembar A4</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+<style>
+  :root{
+    --paper: #F7F5F0;
+    --paper-2: #EFEBE2;
+    --ink: #22221F;
+    --ink-soft: #5B5A52;
+    --line: #D8D3C6;
+    --stamp: #A83C2E;
+    --stamp-ink: #7C2C21;
+    --ok: #3E6B4F;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding: 40px 20px 80px;
+  }
+  .sheet{
+    width:100%;
+    max-width:640px;
+  }
+  .eyebrow{
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin:0 0 6px;
+  }
+  h1{
+    font-family: Georgia, "Times New Roman", serif;
+    font-size:32px;
+    line-height:1.15;
+    margin:0 0 10px;
+    letter-spacing:-0.01em;
+  }
+  .lede{
+    font-family: Georgia, "Times New Roman", serif;
+    font-size:15px;
+    color:var(--ink-soft);
+    line-height:1.55;
+    margin:0 0 32px;
+    max-width:52ch;
+  }
+
+  .drop{
+    position:relative;
+    border:1.5px dashed var(--line);
+    border-radius:2px;
+    background:var(--paper-2);
+    padding:38px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .drop.drag{
+    border-color:var(--stamp);
+    background:#F3E7E1;
+  }
+  .drop input{
+    position:absolute; inset:0; opacity:0; cursor:pointer;
+  }
+  .drop-icon{
+    width:34px; height:44px;
+    margin:0 auto 14px;
+    position:relative;
+  }
+  .drop-icon .page{
+    position:absolute;
+    width:34px; height:44px;
+    border:1.5px solid var(--ink-soft);
+    background:var(--paper);
+    border-radius:1px;
+  }
+  .drop-icon .page:first-child{ transform: translate(-4px,-4px); opacity:.55; }
+  .drop-icon .page:last-child{ transform: translate(4px,4px); }
+  .drop-title{ font-size:13px; margin-bottom:4px; }
+  .drop-sub{ font-size:11px; color:var(--ink-soft); }
+
+  .queue{ margin-top:26px; display:flex; flex-direction:column; gap:10px; }
+  .item{
+    border:1px solid var(--line);
+    background:var(--paper-2);
+    border-radius:2px;
+    padding:12px 14px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    font-size:12px;
+  }
+  .item-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item-status{ color:var(--ink-soft); font-size:11px; white-space:nowrap; }
+  .item-status.done{ color:var(--ok); }
+  .item-status.error{ color:var(--stamp-ink); }
+  .item-thumb{
+    width:28px; height:36px;
+    object-fit:cover;
+    border:1px solid var(--line);
+    background:#fff;
+    flex-shrink:0;
+  }
+  .btn{
+    font-family:inherit;
+    font-size:11px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    border:1px solid var(--ink);
+    background:var(--ink);
+    color:var(--paper);
+    padding:8px 14px;
+    border-radius:2px;
+    cursor:pointer;
+    text-decoration:none;
+    white-space:nowrap;
+    display:inline-block;
+  }
+  .btn:hover{ background:var(--stamp); border-color:var(--stamp); }
+  .btn.ghost{
+    background:transparent;
+    color:var(--ink);
+  }
+  .btn.ghost:hover{ background:var(--ink); color:var(--paper); }
+
+  .layout-row{
+    display:flex; align-items:center; gap:10px;
+    margin-top:22px; font-size:11px; color:var(--ink-soft);
+  }
+  select{
+    font-family:inherit;
+    font-size:11px;
+    background:var(--paper-2);
+    border:1px solid var(--line);
+    color:var(--ink);
+    padding:6px 8px;
+    border-radius:2px;
+  }
+
+  footer{
+    margin-top:44px;
+    font-size:11px;
+    color:var(--ink-soft);
+    border-top:1px solid var(--line);
+    padding-top:16px;
+    line-height:1.6;
+  }
+  .stamp-mark{
+    display:inline-block;
+    border:1.5px solid var(--stamp);
+    color:var(--stamp);
+    padding:1px 6px;
+    border-radius:2px;
+    transform:rotate(-2deg);
+    font-size:10px;
+    letter-spacing:.08em;
+  }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <p class="eyebrow">Alat kantor kecil</p>
+    <h1>Satukan PDF jadi<br>satu lembar A4.</h1>
+    <p class="lede">Jalan langsung di browser ini — tidak ada yang diunggah ke server mana pun. Buka link yang sama di komputer manapun dan hasilnya konsisten.</p>
+
+    <label class="drop" id="drop">
+      <input type="file" id="fileInput" accept="application/pdf" multiple>
+      <div class="drop-icon"><span class="page"></span><span class="page"></span></div>
+      <div class="drop-title">Taruh file PDF di sini, atau klik untuk pilih</div>
+      <div class="drop-sub">Bisa banyak file sekaligus · halaman ditumpuk otomatis</div>
+    </label>
+
+    <div class="layout-row">
+      <span>Susunan:</span>
+      <select id="layoutMode">
+        <option value="stack">Tumpuk atas–bawah (portrait)</option>
+        <option value="side">Berdampingan kiri–kanan</option>
+      </select>
+    </div>
+
+    <div class="queue" id="queue"></div>
+
+    <footer>
+      <span class="stamp-mark">pdf2a4</span> &nbsp;Dibuat sebagai pendamping script Python <code>pdf2a4.py</code> di repo yang sama. Bebas di-host lewat GitHub Pages, satu link untuk semua komputer.
+    </footer>
+  </div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
+
+const DPI = 200;
+const A4_W = Math.round(8.27 * DPI);
+const A4_H = Math.round(11.69 * DPI);
+const GAP = Math.round(DPI * 0.04);
+const BG = "#ffffff";
+
+const dropEl = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const queueEl = document.getElementById('queue');
+const layoutSelect = document.getElementById('layoutMode');
+
+['dragenter','dragover'].forEach(ev =>
+  dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.add('drag'); })
+);
+['dragleave','drop'].forEach(ev =>
+  dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.remove('drag'); })
+);
+dropEl.addEventListener('drop', e => {
+  const files = [...e.dataTransfer.files].filter(f => f.type === 'application/pdf');
+  handleFiles(files);
+});
+fileInput.addEventListener('change', e => {
+  handleFiles([...e.target.files]);
+  fileInput.value = '';
+});
+
+function handleFiles(files){
+  files.forEach(processFile);
+}
+
+async function processFile(file){
+  const row = document.createElement('div');
+  row.className = 'item';
+  row.innerHTML = `
+    <img class="item-thumb" style="visibility:hidden">
+    <span class="item-name">${escapeHtml(file.name)}</span>
+    <span class="item-status">memproses…</span>
+  `;
+  queueEl.prepend(row);
+  const statusEl = row.querySelector('.item-status');
+  const thumbEl = row.querySelector('.item-thumb');
+
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+
+    const pageCanvases = [];
+    for (let i = 1; i <= pdf.numPages; i++){
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: DPI / 72 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      pageCanvases.push(canvas);
+    }
+
+    const mode = layoutSelect.value;
+    const finalCanvas = mode === 'side'
+      ? composeSideBySide(pageCanvases)
+      : composeStacked(pageCanvases);
+
+    const blob = await new Promise(res => finalCanvas.toBlob(res, 'image/png'));
+    const url = URL.createObjectURL(blob);
+
+    thumbEl.src = url;
+    thumbEl.style.visibility = 'visible';
+
+    const outName = file.name.replace(/\.pdf$/i, '') + '.png';
+    statusEl.innerHTML = `<a class="btn" href="${url}" download="${escapeAttr(outName)}">Unduh PNG</a>`;
+  } catch (err){
+    console.error(err);
+    statusEl.textContent = 'gagal: ' + (err.message || 'periksa file');
+    statusEl.classList.add('error');
+  }
+}
+
+function composeStacked(pages){
+  const canvas = document.createElement('canvas');
+  canvas.width = A4_W;
+  canvas.height = A4_H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, A4_W, A4_H);
+
+  const n = pages.length;
+  const slotH = (A4_H - GAP * (n - 1)) / n;
+  let y = 0;
+  for (const p of pages){
+    const scale = Math.min(A4_W / p.width, slotH / p.height);
+    const w = Math.round(p.width * scale);
+    const h = Math.round(p.height * scale);
+    const x = Math.round((A4_W - w) / 2);
+    const yy = Math.round(y + (slotH - h) / 2);
+    ctx.drawImage(p, x, yy, w, h);
+    y += slotH + GAP;
+  }
+  return canvas;
+}
+
+function composeSideBySide(pages){
+  // Kanvas landscape A4 supaya halaman berdampingan tetap proporsional
+  const canvas = document.createElement('canvas');
+  canvas.width = A4_H;
+  canvas.height = A4_W;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const n = pages.length;
+  const slotW = (canvas.width - GAP * (n - 1)) / n;
+  let x = 0;
+  for (const p of pages){
+    const scale = Math.min(slotW / p.width, canvas.height / p.height);
+    const w = Math.round(p.width * scale);
+    const h = Math.round(p.height * scale);
+    const xx = Math.round(x + (slotW - w) / 2);
+    const y = Math.round((canvas.height - h) / 2);
+    ctx.drawImage(p, xx, y, w, h);
+    x += slotW + GAP;
+  }
+  return canvas;
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s){ return escapeHtml(s); }
+</script>
+</body>
+</html>
