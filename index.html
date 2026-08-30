@@ -169,8 +169,8 @@
 <body>
   <div class="sheet">
     <p class="eyebrow">Alat kantor kecil</p>
-    <h1>Satukan PDF jadi<br>satu lembar A4.</h1>
-    <p class="lede">Jalan langsung di browser ini — tidak ada yang diunggah ke server mana pun. Buka link yang sama di komputer manapun dan hasilnya konsisten.</p>
+    <h1>Satukan PDF, hilangkan<br>spasi kosong.</h1>
+    <p class="lede">Jalan langsung di browser ini — tidak ada yang diunggah ke server mana pun. Cocok untuk PDF hasil download kantor yang terpotong 2–3 halaman padahal aslinya cuma 1 halaman.</p>
 
     <label class="drop" id="drop">
       <input type="file" id="fileInput" accept="application/pdf" multiple>
@@ -180,12 +180,15 @@
     </label>
 
     <div class="layout-row">
-      <span>Susunan:</span>
+      <span>Mode:</span>
       <select id="layoutMode">
-        <option value="stack">Tumpuk atas–bawah (portrait)</option>
-        <option value="side">Berdampingan kiri–kanan</option>
+        <option value="natural">Rapatkan &amp; hilangkan spasi kosong (disarankan)</option>
+        <option value="a4-stack">Rapatkan, tapi paksa muat 1 lembar A4</option>
+        <option value="a4-side">Berdampingan di kanvas A4 (landscape)</option>
+        <option value="raw">Tanpa diproses (halaman asli apa adanya)</option>
       </select>
     </div>
+    <p class="lede" style="font-size:12px;margin-top:10px;">Mode pertama otomatis mendeteksi baris kosong akibat halaman PDF yang terpotong, lalu menyambung ulang isinya jadi rapat — seperti tampilan sebelum di-download.</p>
 
     <div class="queue" id="queue"></div>
 
@@ -262,9 +265,15 @@ async function processFile(file){
     }
 
     const mode = layoutSelect.value;
-    const finalCanvas = mode === 'side'
-      ? composeSideBySide(pageCanvases)
-      : composeStacked(pageCanvases);
+    let finalCanvas;
+    if (mode === 'raw'){
+      finalCanvas = composeStacked(pageCanvases);
+    } else {
+      const trimmed = trimPages(pageCanvases);
+      if (mode === 'natural') finalCanvas = stitchNatural(trimmed);
+      else if (mode === 'a4-side') finalCanvas = composeSideBySide(trimmed);
+      else finalCanvas = composeStacked(trimmed); // a4-stack
+    }
 
     const blob = await new Promise(res => finalCanvas.toBlob(res, 'image/png'));
     const url = URL.createObjectURL(blob);
@@ -279,6 +288,91 @@ async function processFile(file){
     statusEl.textContent = 'gagal: ' + (err.message || 'periksa file');
     statusEl.classList.add('error');
   }
+}
+
+// --- Deteksi & pemotongan spasi kosong ---
+
+// Ambang batas: pixel dianggap "isi konten" kalau salah satu channel RGB
+// cukup jauh dari putih (mengakomodasi anti-aliasing tulisan/gambar).
+const WHITE_THRESHOLD = 248;
+// Minimal jumlah pixel non-putih dalam satu baris supaya baris itu dianggap "ada isinya",
+// bukan noise/artefak scan.
+function minContentPixels(width){ return Math.max(3, Math.round(width * 0.002)); }
+
+function findContentRows(canvas){
+  const ctx = canvas.getContext('2d');
+  const { width, height } = canvas;
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const threshold = minContentPixels(width);
+  const rowHasContent = new Array(height).fill(false);
+
+  for (let y = 0; y < height; y++){
+    let count = 0;
+    const rowOffset = y * width * 4;
+    for (let x = 0; x < width; x++){
+      const i = rowOffset + x * 4;
+      if (data[i] < WHITE_THRESHOLD || data[i+1] < WHITE_THRESHOLD || data[i+2] < WHITE_THRESHOLD){
+        count++;
+        if (count >= threshold) { rowHasContent[y] = true; break; }
+      }
+    }
+  }
+
+  let top = height, bottom = -1;
+  for (let y = 0; y < height; y++){
+    if (rowHasContent[y]){ if (y < top) top = y; if (y > bottom) bottom = y; }
+  }
+  if (bottom === -1) return { top: 0, bottom: height - 1 }; // halaman kosong, jangan dipotong
+
+  return { top, bottom };
+}
+
+// Potong tiap halaman: sisakan margin wajar di awal dokumen (atas halaman pertama)
+// dan akhir dokumen (bawah halaman terakhir), tapi potong rapat di titik sambungan
+// antar-halaman (itulah sumber "spasi kosong" akibat pemotongan PDF).
+function trimPages(pages){
+  const n = pages.length;
+  const outerMargin = Math.round(DPI * 0.12);  // ~batas wajar di awal/akhir dokumen
+  const innerMargin = Math.round(DPI * 0.03);  // sisa tipis di titik sambungan
+
+  return pages.map((canvas, idx) => {
+    const { top: contentTop, bottom: contentBottom } = findContentRows(canvas);
+    const isFirst = idx === 0;
+    const isLast = idx === n - 1;
+
+    const top = Math.max(0, contentTop - (isFirst ? outerMargin : innerMargin));
+    const bottom = Math.min(canvas.height - 1, contentBottom + (isLast ? outerMargin : innerMargin));
+    const cropH = Math.max(1, bottom - top + 1);
+
+    const cropped = document.createElement('canvas');
+    cropped.width = canvas.width;
+    cropped.height = cropH;
+    cropped.getContext('2d').drawImage(canvas, 0, top, canvas.width, cropH, 0, 0, canvas.width, cropH);
+    return cropped;
+  });
+}
+
+// Sambung halaman-halaman yang sudah dipotong jadi satu gambar utuh,
+// ukuran alami (tidak dipaksa muat ke A4) — hasilnya mendekati tampilan
+// dokumen sebelum terpotong jadi beberapa halaman PDF.
+function stitchNatural(pages){
+  const width = Math.max(...pages.map(p => p.width));
+  const totalHeight = pages.reduce((sum, p) => sum + p.height, 0);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = totalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, width, totalHeight);
+
+  let y = 0;
+  for (const p of pages){
+    const x = Math.round((width - p.width) / 2);
+    ctx.drawImage(p, x, y);
+    y += p.height;
+  }
+  return canvas;
 }
 
 function composeStacked(pages){
