@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>pdf2a4 — PDF jadi satu lembar A4</title>
+<title>pdfpng</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
@@ -25,33 +25,15 @@
     min-height:100vh;
     display:flex;
     justify-content:center;
-    padding: 40px 20px 80px;
+    padding: 40px 20px 60px;
   }
-  .sheet{
-    width:100%;
-    max-width:640px;
-  }
-  .eyebrow{
-    font-size:12px;
-    letter-spacing:.14em;
-    text-transform:uppercase;
-    color:var(--ink-soft);
-    margin:0 0 6px;
-  }
+  .sheet{ width:100%; max-width:560px; }
   h1{
     font-family: Georgia, "Times New Roman", serif;
-    font-size:32px;
-    line-height:1.15;
-    margin:0 0 10px;
+    font-size:26px;
+    line-height:1.2;
+    margin:0 0 24px;
     letter-spacing:-0.01em;
-  }
-  .lede{
-    font-family: Georgia, "Times New Roman", serif;
-    font-size:15px;
-    color:var(--ink-soft);
-    line-height:1.55;
-    margin:0 0 32px;
-    max-width:52ch;
   }
 
   .drop{
@@ -59,156 +41,81 @@
     border:1.5px dashed var(--line);
     border-radius:2px;
     background:var(--paper-2);
-    padding:38px 20px;
+    padding:34px 20px;
     text-align:center;
     cursor:pointer;
     transition:border-color .15s ease, background .15s ease;
   }
-  .drop.drag{
-    border-color:var(--stamp);
-    background:#F3E7E1;
-  }
-  .drop:focus-visible{
-    outline:2px solid var(--stamp);
-    outline-offset:2px;
-  }
-  .drop-icon{
-    width:34px; height:44px;
-    margin:0 auto 14px;
-    position:relative;
-  }
+  .drop.drag{ border-color:var(--stamp); background:#F3E7E1; }
+  .drop:focus-visible{ outline:2px solid var(--stamp); outline-offset:2px; }
+  .drop-icon{ width:34px; height:44px; margin:0 auto 12px; position:relative; }
   .drop-icon .page{
-    position:absolute;
-    width:34px; height:44px;
+    position:absolute; width:34px; height:44px;
     border:1.5px solid var(--ink-soft);
-    background:var(--paper);
-    border-radius:1px;
+    background:var(--paper); border-radius:1px;
   }
   .drop-icon .page:first-child{ transform: translate(-4px,-4px); opacity:.55; }
   .drop-icon .page:last-child{ transform: translate(4px,4px); }
   .drop-title{ font-size:13px; margin-bottom:4px; }
   .drop-sub{ font-size:11px; color:var(--ink-soft); }
 
-  .queue{ margin-top:26px; display:flex; flex-direction:column; gap:10px; }
+  .dpi-row{
+    display:flex; align-items:center; gap:10px;
+    margin-top:18px; font-size:11px; color:var(--ink-soft);
+  }
+  select{
+    font-family:inherit; font-size:11px;
+    background:var(--paper-2); border:1px solid var(--line);
+    color:var(--ink); padding:6px 8px; border-radius:2px;
+  }
+
+  .queue{ margin-top:22px; display:flex; flex-direction:column; gap:10px; }
   .item{
     border:1px solid var(--line);
     background:var(--paper-2);
     border-radius:2px;
     padding:12px 14px;
-    display:flex;
-    align-items:center;
-    gap:12px;
+    display:flex; align-items:center; gap:12px;
     font-size:12px;
   }
   .item-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .item-status{ color:var(--ink-soft); font-size:11px; white-space:nowrap; }
-  .item-status.done{ color:var(--ok); }
+  .item-status{ color:var(--ink-soft); font-size:11px; white-space:nowrap; display:flex; align-items:center; gap:8px; }
   .item-status.error{ color:var(--stamp-ink); }
+  .item-dpi-tag{ color:var(--ok); font-size:10px; }
   .item-thumb{
-    width:28px; height:36px;
-    object-fit:cover;
-    border:1px solid var(--line);
-    background:#fff;
-    flex-shrink:0;
+    width:28px; height:36px; object-fit:cover;
+    border:1px solid var(--line); background:#fff; flex-shrink:0;
   }
   .btn{
-    font-family:inherit;
-    font-size:11px;
-    letter-spacing:.04em;
-    text-transform:uppercase;
-    border:1px solid var(--ink);
-    background:var(--ink);
-    color:var(--paper);
-    padding:8px 14px;
-    border-radius:2px;
-    cursor:pointer;
-    text-decoration:none;
-    white-space:nowrap;
-    display:inline-block;
+    font-family:inherit; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+    border:1px solid var(--ink); background:var(--ink); color:var(--paper);
+    padding:8px 14px; border-radius:2px; cursor:pointer;
+    text-decoration:none; white-space:nowrap; display:inline-block;
   }
   .btn:hover{ background:var(--stamp); border-color:var(--stamp); }
-  .btn.ghost{
-    background:transparent;
-    color:var(--ink);
-  }
-  .btn.ghost:hover{ background:var(--ink); color:var(--paper); }
-
-  .layout-row{
-    display:flex; align-items:center; gap:10px;
-    margin-top:22px; font-size:11px; color:var(--ink-soft);
-  }
-  select{
-    font-family:inherit;
-    font-size:11px;
-    background:var(--paper-2);
-    border:1px solid var(--line);
-    color:var(--ink);
-    padding:6px 8px;
-    border-radius:2px;
-  }
-
-  footer{
-    margin-top:44px;
-    font-size:11px;
-    color:var(--ink-soft);
-    border-top:1px solid var(--line);
-    padding-top:16px;
-    line-height:1.6;
-  }
-  .stamp-mark{
-    display:inline-block;
-    border:1.5px solid var(--stamp);
-    color:var(--stamp);
-    padding:1px 6px;
-    border-radius:2px;
-    transform:rotate(-2deg);
-    font-size:10px;
-    letter-spacing:.08em;
-  }
 </style>
 </head>
 <body>
   <div class="sheet">
-    <p class="eyebrow">Alat kantor kecil</p>
     <h1>Satukan PDF, hilangkan<br>spasi kosong.</h1>
-    <p class="lede">Jalan langsung di browser ini — tidak ada yang diunggah ke server mana pun. Cocok untuk PDF hasil download kantor yang terpotong 2–3 halaman padahal aslinya cuma 1 halaman.</p>
 
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Pilih atau taruh file PDF">
       <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
       <div class="drop-icon"><span class="page"></span><span class="page"></span></div>
       <div class="drop-title">Taruh file PDF di sini, atau klik untuk pilih</div>
-      <div class="drop-sub">Bisa banyak file sekaligus · halaman ditumpuk otomatis</div>
+      <div class="drop-sub">Bisa banyak file sekaligus</div>
     </div>
 
-    <div class="layout-row">
-      <span>Mode:</span>
-      <select id="layoutMode">
-        <option value="natural">Rapatkan &amp; hilangkan spasi kosong (disarankan)</option>
-        <option value="a4-stack">Rapatkan, tapi paksa muat 1 lembar A4</option>
-        <option value="a4-side">Berdampingan di kanvas A4 (landscape)</option>
-        <option value="raw">Tanpa diproses (halaman asli apa adanya)</option>
-      </select>
-    </div>
-    <p class="lede" style="font-size:12px;margin-top:10px;">Mode pertama otomatis mendeteksi baris kosong akibat halaman PDF yang terpotong, lalu menyambung ulang isinya jadi rapat — seperti tampilan sebelum di-download.</p>
-
-    <div class="layout-row">
+    <div class="dpi-row">
       <span>Resolusi:</span>
       <select id="dpiSelect">
-        <option value="300">300 DPI — 2480×3508px (standar)</option>
-        <option value="600" selected>600 DPI — 4961×7016px (lebih tajam, file lebih besar)</option>
+        <option value="300" selected>300 DPI</option>
+        <option value="450">450 DPI</option>
+        <option value="600">600 DPI</option>
       </select>
     </div>
 
-    <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--ink-soft);margin-top:14px;cursor:pointer;">
-      <input type="checkbox" id="fitA4Print" checked style="margin-top:2px;">
-      <span>Pastikan ukuran akhir presisi rasio A4 (210×297mm) sesuai resolusi di atas. Gambar diskalakan proporsional dan ditengahkan — tidak di-stretch/gepeng, jadi tetap pas di kotak PPT manapun tanpa terpotong.</span>
-    </label>
-
     <div class="queue" id="queue"></div>
-
-    <footer>
-      <span class="stamp-mark">pdf2a4</span> &nbsp;Dibuat sebagai pendamping script Python <code>pdf2a4.py</code> di repo yang sama. Bebas di-host lewat GitHub Pages, satu link untuk semua komputer.
-    </footer>
   </div>
 
 <script>
@@ -221,22 +128,22 @@ if (typeof pdfjsLib === 'undefined') {
 }
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-// Ukuran A4 dihitung presisi dari mm asli (210 x 297 mm) pada DPI berapapun
-// yang dipilih user, supaya rasio 210:297 selalu terjaga persis sama —
-// itu kuncinya supaya tetap pas di kotak PPT manapun tanpa terpotong,
-// berapapun resolusinya.
+const BG = "#ffffff";
 function getA4Size(dpi){
   return {
     w: Math.round(210 * dpi / 25.4),
     h: Math.round(297 * dpi / 25.4)
   };
 }
-const BG = "#ffffff";
 
 const dropEl = document.getElementById('drop');
 const fileInput = document.getElementById('fileInput');
 const queueEl = document.getElementById('queue');
-const layoutSelect = document.getElementById('layoutMode');
+const dpiSelect = document.getElementById('dpiSelect');
+
+// Menyimpan semua file yang sudah dimasukkan, supaya bisa diproses ulang
+// otomatis kalau resolusi diganti belakangan.
+const filesQueue = [];
 
 ['dragenter','dragover'].forEach(ev =>
   dropEl.addEventListener(ev, e => { e.preventDefault(); dropEl.classList.add('drag'); })
@@ -257,28 +164,41 @@ fileInput.addEventListener('change', e => {
   fileInput.value = '';
 });
 
+dpiSelect.addEventListener('change', () => {
+  const dpi = parseInt(dpiSelect.value, 10);
+  filesQueue.forEach(entry => processEntry(entry, dpi));
+});
+
 function handleFiles(files){
-  files.forEach(processFile);
+  const dpi = parseInt(dpiSelect.value, 10);
+  files.forEach(file => {
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.innerHTML = `
+      <img class="item-thumb" style="visibility:hidden">
+      <span class="item-name">${escapeHtml(file.name)}</span>
+      <span class="item-status">memproses…</span>
+    `;
+    queueEl.prepend(row);
+    const entry = {
+      file,
+      statusEl: row.querySelector('.item-status'),
+      thumbEl: row.querySelector('.item-thumb'),
+      url: null
+    };
+    filesQueue.push(entry);
+    processEntry(entry, dpi);
+  });
 }
 
-async function processFile(file){
-  const row = document.createElement('div');
-  row.className = 'item';
-  row.innerHTML = `
-    <img class="item-thumb" style="visibility:hidden">
-    <span class="item-name">${escapeHtml(file.name)}</span>
-    <span class="item-status">memproses…</span>
-  `;
-  queueEl.prepend(row);
-  const statusEl = row.querySelector('.item-status');
-  const thumbEl = row.querySelector('.item-thumb');
+async function processEntry(entry, dpi){
+  entry.statusEl.classList.remove('error');
+  entry.statusEl.textContent = 'memproses…';
 
   try {
-    const dpi = parseInt(document.getElementById('dpiSelect').value, 10);
     const { w: A4_W, h: A4_H } = getA4Size(dpi);
-    const GAP = Math.round(dpi * 0.04);
 
-    const buf = await file.arrayBuffer();
+    const buf = await entry.file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
 
     const pageCanvases = [];
@@ -292,43 +212,33 @@ async function processFile(file){
       pageCanvases.push(canvas);
     }
 
-    const mode = layoutSelect.value;
-    let finalCanvas;
-    if (mode === 'raw'){
-      finalCanvas = composeStacked(pageCanvases, A4_W, A4_H, GAP);
-    } else {
-      const trimmed = trimPages(pageCanvases, dpi);
-      if (mode === 'natural') finalCanvas = stitchNatural(trimmed);
-      else if (mode === 'a4-side') finalCanvas = composeSideBySide(trimmed, A4_W, A4_H, GAP);
-      else finalCanvas = composeStacked(trimmed, A4_W, A4_H, GAP); // a4-stack
-    }
-
-    if (document.getElementById('fitA4Print').checked){
-      finalCanvas = fitToPrintA4(finalCanvas, A4_W, A4_H);
-    }
+    const trimmed = trimPages(pageCanvases, dpi);
+    const natural = stitchNatural(trimmed);
+    const finalCanvas = fitToPrintA4(natural, A4_W, A4_H);
 
     const blob = await new Promise(res => finalCanvas.toBlob(res, 'image/png'));
-    const url = URL.createObjectURL(blob);
 
-    thumbEl.src = url;
-    thumbEl.style.visibility = 'visible';
+    if (entry.url) URL.revokeObjectURL(entry.url);
+    entry.url = URL.createObjectURL(blob);
 
-    const outName = file.name.replace(/\.pdf$/i, '') + '.png';
-    statusEl.innerHTML = `<a class="btn" href="${url}" download="${escapeAttr(outName)}">Unduh PNG</a>`;
+    entry.thumbEl.src = entry.url;
+    entry.thumbEl.style.visibility = 'visible';
+
+    const outName = entry.file.name.replace(/\.pdf$/i, '') + '.png';
+    entry.statusEl.innerHTML = `
+      <a class="btn" href="${entry.url}" download="${escapeAttr(outName)}">Unduh PNG</a>
+      <span class="item-dpi-tag">${dpi} DPI</span>
+    `;
   } catch (err){
     console.error(err);
-    statusEl.textContent = 'gagal: ' + (err.message || 'periksa file');
-    statusEl.classList.add('error');
+    entry.statusEl.textContent = 'gagal: ' + (err.message || 'periksa file');
+    entry.statusEl.classList.add('error');
   }
 }
 
 // --- Deteksi & pemotongan spasi kosong ---
 
-// Ambang batas: pixel dianggap "isi konten" kalau salah satu channel RGB
-// cukup jauh dari putih (mengakomodasi anti-aliasing tulisan/gambar).
 const WHITE_THRESHOLD = 248;
-// Minimal jumlah pixel non-putih dalam satu baris supaya baris itu dianggap "ada isinya",
-// bukan noise/artefak scan.
 function minContentPixels(width){ return Math.max(3, Math.round(width * 0.002)); }
 
 function findContentRows(canvas){
@@ -354,18 +264,15 @@ function findContentRows(canvas){
   for (let y = 0; y < height; y++){
     if (rowHasContent[y]){ if (y < top) top = y; if (y > bottom) bottom = y; }
   }
-  if (bottom === -1) return { top: 0, bottom: height - 1 }; // halaman kosong, jangan dipotong
+  if (bottom === -1) return { top: 0, bottom: height - 1 };
 
   return { top, bottom };
 }
 
-// Potong tiap halaman: sisakan margin wajar di awal dokumen (atas halaman pertama)
-// dan akhir dokumen (bawah halaman terakhir), tapi potong rapat di titik sambungan
-// antar-halaman (itulah sumber "spasi kosong" akibat pemotongan PDF).
 function trimPages(pages, dpi){
   const n = pages.length;
-  const outerMargin = Math.round(dpi * 0.12);  // ~batas wajar di awal/akhir dokumen
-  const innerMargin = Math.round(dpi * 0.03);  // sisa tipis di titik sambungan
+  const outerMargin = Math.round(dpi * 0.12);
+  const innerMargin = Math.round(dpi * 0.03);
 
   return pages.map((canvas, idx) => {
     const { top: contentTop, bottom: contentBottom } = findContentRows(canvas);
@@ -384,9 +291,6 @@ function trimPages(pages, dpi){
   });
 }
 
-// Sambung halaman-halaman yang sudah dipotong jadi satu gambar utuh,
-// ukuran alami (tidak dipaksa muat ke A4) — hasilnya mendekati tampilan
-// dokumen sebelum terpotong jadi beberapa halaman PDF.
 function stitchNatural(pages){
   const width = Math.max(...pages.map(p => p.width));
   const totalHeight = pages.reduce((sum, p) => sum + p.height, 0);
@@ -407,9 +311,6 @@ function stitchNatural(pages){
   return canvas;
 }
 
-// Skalakan gambar apa pun (rasio berapapun) supaya PAS di dalam kanvas
-// A4 ukuran cetak (2480x3508px) tanpa distorsi: sisi terpanjang disesuaikan,
-// sisa ruang diisi putih, gambar ditengahkan. Tidak pernah men-stretch.
 function fitToPrintA4(canvas, A4_W, A4_H){
   if (canvas.width === A4_W && canvas.height === A4_H) return canvas;
 
@@ -429,53 +330,6 @@ function fitToPrintA4(canvas, A4_W, A4_H){
   const y = Math.round((A4_H - h) / 2);
   ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, x, y, w, h);
   return out;
-}
-
-function composeStacked(pages, A4_W, A4_H, GAP){
-  const canvas = document.createElement('canvas');
-  canvas.width = A4_W;
-  canvas.height = A4_H;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = BG;
-  ctx.fillRect(0, 0, A4_W, A4_H);
-
-  const n = pages.length;
-  const slotH = (A4_H - GAP * (n - 1)) / n;
-  let y = 0;
-  for (const p of pages){
-    const scale = Math.min(A4_W / p.width, slotH / p.height);
-    const w = Math.round(p.width * scale);
-    const h = Math.round(p.height * scale);
-    const x = Math.round((A4_W - w) / 2);
-    const yy = Math.round(y + (slotH - h) / 2);
-    ctx.drawImage(p, x, yy, w, h);
-    y += slotH + GAP;
-  }
-  return canvas;
-}
-
-function composeSideBySide(pages, A4_W, A4_H, GAP){
-  // Kanvas landscape A4 supaya halaman berdampingan tetap proporsional
-  const canvas = document.createElement('canvas');
-  canvas.width = A4_H;
-  canvas.height = A4_W;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = BG;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const n = pages.length;
-  const slotW = (canvas.width - GAP * (n - 1)) / n;
-  let x = 0;
-  for (const p of pages){
-    const scale = Math.min(slotW / p.width, canvas.height / p.height);
-    const w = Math.round(p.width * scale);
-    const h = Math.round(p.height * scale);
-    const xx = Math.round(x + (slotW - w) / 2);
-    const y = Math.round((canvas.height - h) / 2);
-    ctx.drawImage(p, xx, y, w, h);
-    x += slotW + GAP;
-  }
-  return canvas;
 }
 
 function escapeHtml(s){
