@@ -170,8 +170,8 @@
 <body>
   <div class="sheet">
     <p class="eyebrow">Alat kantor kecil</p>
-    <h1>Satukan PDF jadi PNG. <br>sopo tuku sarapan? Aku titip.</h1>
-    <p class="lede">Proses Konversi Jalan langsung di browser ini — tidak ada yang diunggah ke server mana pun. Cocok untuk PDF hasil download kantor yang terpotong 2–3 halaman padahal aslinya cuma 1 halaman.</p>
+    <h1>Satukan PDF, hilangkan<br>spasi kosong.</h1>
+    <p class="lede">Jalan langsung di browser ini — tidak ada yang diunggah ke server mana pun. Cocok untuk PDF hasil download kantor yang terpotong 2–3 halaman padahal aslinya cuma 1 halaman.</p>
 
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Pilih atau taruh file PDF">
       <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
@@ -191,10 +191,15 @@
     </div>
     <p class="lede" style="font-size:12px;margin-top:10px;">Mode pertama otomatis mendeteksi baris kosong akibat halaman PDF yang terpotong, lalu menyambung ulang isinya jadi rapat — seperti tampilan sebelum di-download.</p>
 
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--ink-soft);margin-top:14px;cursor:pointer;">
+      <input type="checkbox" id="fitA4Print" checked style="margin-top:2px;">
+      <span>Pastikan ukuran akhir tepat <strong>2480×3508 px</strong> (kertas A4 cetak, 210×297mm). Gambar diskalakan proporsional dan ditengahkan — tidak di-stretch/gepeng.</span>
+    </label>
+
     <div class="queue" id="queue"></div>
 
     <footer>
-      <span class="stamp-mark">pdfpng</span> &nbsp;Dibuat sebagai alat bantu yang tidak penting, untuk mengerjakan sesuatu yang juga tidak penting. satu link untuk semua komputer & HP. 
+      <span class="stamp-mark">pdf2a4</span> &nbsp;Dibuat sebagai pendamping script Python <code>pdf2a4.py</code> di repo yang sama. Bebas di-host lewat GitHub Pages, satu link untuk semua komputer.
     </footer>
   </div>
 
@@ -208,9 +213,11 @@ if (typeof pdfjsLib === 'undefined') {
 }
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-const DPI = 200;
-const A4_W = Math.round(8.27 * DPI);
-const A4_H = Math.round(11.69 * DPI);
+const DPI = 300; // 300 DPI = resolusi standar cetak dokumen
+// Ukuran A4 dihitung presisi dari mm asli (210 x 297 mm), bukan pembulatan inci,
+// supaya hasilnya tepat 2480 x 3508 px pada 300 DPI.
+const A4_W = Math.round(210 * DPI / 25.4);   // 2480
+const A4_H = Math.round(297 * DPI / 25.4);   // 3508
 const GAP = Math.round(DPI * 0.04);
 const BG = "#ffffff";
 
@@ -278,6 +285,10 @@ async function processFile(file){
       if (mode === 'natural') finalCanvas = stitchNatural(trimmed);
       else if (mode === 'a4-side') finalCanvas = composeSideBySide(trimmed);
       else finalCanvas = composeStacked(trimmed); // a4-stack
+    }
+
+    if (document.getElementById('fitA4Print').checked){
+      finalCanvas = fitToPrintA4(finalCanvas);
     }
 
     const blob = await new Promise(res => finalCanvas.toBlob(res, 'image/png'));
@@ -378,6 +389,28 @@ function stitchNatural(pages){
     y += p.height;
   }
   return canvas;
+}
+
+// Skalakan gambar apa pun (rasio berapapun) supaya PAS di dalam kanvas
+// A4 ukuran cetak (2480x3508px) tanpa distorsi: sisi terpanjang disesuaikan,
+// sisa ruang diisi putih, gambar ditengahkan. Tidak pernah men-stretch.
+function fitToPrintA4(canvas){
+  if (canvas.width === A4_W && canvas.height === A4_H) return canvas;
+
+  const out = document.createElement('canvas');
+  out.width = A4_W;
+  out.height = A4_H;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, A4_W, A4_H);
+
+  const scale = Math.min(A4_W / canvas.width, A4_H / canvas.height);
+  const w = Math.round(canvas.width * scale);
+  const h = Math.round(canvas.height * scale);
+  const x = Math.round((A4_W - w) / 2);
+  const y = Math.round((A4_H - h) / 2);
+  ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, x, y, w, h);
+  return out;
 }
 
 function composeStacked(pages){
