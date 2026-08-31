@@ -213,11 +213,18 @@ if (typeof pdfjsLib === 'undefined') {
 }
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-const DPI = 300; // 300 DPI = resolusi standar cetak dokumen
+// DPI render: dipakai saat pdf.js membaca/menggambar PDF jadi pixel.
+// Dibuat lebih tinggi dari DPI cetak supaya detail huruf lebih halus
+// (teknik supersampling) — sebelum akhirnya diperkecil presisi ke ukuran cetak.
+const DPI = 450;
+// DPI cetak: dipakai HANYA untuk menghitung ukuran kanvas A4 akhir.
+// Ini yang menentukan ukuran file jadi tetap 2480x3508px, terlepas dari
+// berapapun DPI render di atas.
+const PRINT_DPI = 300;
 // Ukuran A4 dihitung presisi dari mm asli (210 x 297 mm), bukan pembulatan inci,
 // supaya hasilnya tepat 2480 x 3508 px pada 300 DPI.
-const A4_W = Math.round(210 * DPI / 25.4);   // 2480
-const A4_H = Math.round(297 * DPI / 25.4);   // 3508
+const A4_W = Math.round(210 * PRINT_DPI / 25.4);   // 2480
+const A4_H = Math.round(297 * PRINT_DPI / 25.4);   // 3508
 const GAP = Math.round(DPI * 0.04);
 const BG = "#ffffff";
 
@@ -401,6 +408,8 @@ function fitToPrintA4(canvas){
   out.width = A4_W;
   out.height = A4_H;
   const ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, A4_W, A4_H);
 
