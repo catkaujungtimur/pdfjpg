@@ -191,9 +191,17 @@
     </div>
     <p class="lede" style="font-size:12px;margin-top:10px;">Mode pertama otomatis mendeteksi baris kosong akibat halaman PDF yang terpotong, lalu menyambung ulang isinya jadi rapat — seperti tampilan sebelum di-download.</p>
 
+    <div class="layout-row">
+      <span>Resolusi:</span>
+      <select id="dpiSelect">
+        <option value="300">300 DPI — 2480×3508px (standar)</option>
+        <option value="600" selected>600 DPI — 4961×7016px (lebih tajam, file lebih besar)</option>
+      </select>
+    </div>
+
     <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--ink-soft);margin-top:14px;cursor:pointer;">
       <input type="checkbox" id="fitA4Print" checked style="margin-top:2px;">
-      <span>Pastikan ukuran akhir tepat <strong>2480×3508 px</strong> (kertas A4 cetak, 210×297mm). Gambar diskalakan proporsional dan ditengahkan — tidak di-stretch/gepeng.</span>
+      <span>Pastikan ukuran akhir presisi rasio A4 (210×297mm) sesuai resolusi di atas. Gambar diskalakan proporsional dan ditengahkan — tidak di-stretch/gepeng, jadi tetap pas di kotak PPT manapun tanpa terpotong.</span>
     </label>
 
     <div class="queue" id="queue"></div>
@@ -213,19 +221,16 @@ if (typeof pdfjsLib === 'undefined') {
 }
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-// DPI render: dipakai saat pdf.js membaca/menggambar PDF jadi pixel.
-// Dibuat lebih tinggi dari DPI cetak supaya detail huruf lebih halus
-// (teknik supersampling) — sebelum akhirnya diperkecil presisi ke ukuran cetak.
-const DPI = 450;
-// DPI cetak: dipakai HANYA untuk menghitung ukuran kanvas A4 akhir.
-// Ini yang menentukan ukuran file jadi tetap 2480x3508px, terlepas dari
-// berapapun DPI render di atas.
-const PRINT_DPI = 300;
-// Ukuran A4 dihitung presisi dari mm asli (210 x 297 mm), bukan pembulatan inci,
-// supaya hasilnya tepat 2480 x 3508 px pada 300 DPI.
-const A4_W = Math.round(210 * PRINT_DPI / 25.4);   // 2480
-const A4_H = Math.round(297 * PRINT_DPI / 25.4);   // 3508
-const GAP = Math.round(DPI * 0.04);
+// Ukuran A4 dihitung presisi dari mm asli (210 x 297 mm) pada DPI berapapun
+// yang dipilih user, supaya rasio 210:297 selalu terjaga persis sama —
+// itu kuncinya supaya tetap pas di kotak PPT manapun tanpa terpotong,
+// berapapun resolusinya.
+function getA4Size(dpi){
+  return {
+    w: Math.round(210 * dpi / 25.4),
+    h: Math.round(297 * dpi / 25.4)
+  };
+}
 const BG = "#ffffff";
 
 const dropEl = document.getElementById('drop');
@@ -269,13 +274,17 @@ async function processFile(file){
   const thumbEl = row.querySelector('.item-thumb');
 
   try {
+    const dpi = parseInt(document.getElementById('dpiSelect').value, 10);
+    const { w: A4_W, h: A4_H } = getA4Size(dpi);
+    const GAP = Math.round(dpi * 0.04);
+
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
 
     const pageCanvases = [];
     for (let i = 1; i <= pdf.numPages; i++){
       const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: DPI / 72 });
+      const viewport = page.getViewport({ scale: dpi / 72 });
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
@@ -286,16 +295,16 @@ async function processFile(file){
     const mode = layoutSelect.value;
     let finalCanvas;
     if (mode === 'raw'){
-      finalCanvas = composeStacked(pageCanvases);
+      finalCanvas = composeStacked(pageCanvases, A4_W, A4_H, GAP);
     } else {
-      const trimmed = trimPages(pageCanvases);
+      const trimmed = trimPages(pageCanvases, dpi);
       if (mode === 'natural') finalCanvas = stitchNatural(trimmed);
-      else if (mode === 'a4-side') finalCanvas = composeSideBySide(trimmed);
-      else finalCanvas = composeStacked(trimmed); // a4-stack
+      else if (mode === 'a4-side') finalCanvas = composeSideBySide(trimmed, A4_W, A4_H, GAP);
+      else finalCanvas = composeStacked(trimmed, A4_W, A4_H, GAP); // a4-stack
     }
 
     if (document.getElementById('fitA4Print').checked){
-      finalCanvas = fitToPrintA4(finalCanvas);
+      finalCanvas = fitToPrintA4(finalCanvas, A4_W, A4_H);
     }
 
     const blob = await new Promise(res => finalCanvas.toBlob(res, 'image/png'));
@@ -353,10 +362,10 @@ function findContentRows(canvas){
 // Potong tiap halaman: sisakan margin wajar di awal dokumen (atas halaman pertama)
 // dan akhir dokumen (bawah halaman terakhir), tapi potong rapat di titik sambungan
 // antar-halaman (itulah sumber "spasi kosong" akibat pemotongan PDF).
-function trimPages(pages){
+function trimPages(pages, dpi){
   const n = pages.length;
-  const outerMargin = Math.round(DPI * 0.12);  // ~batas wajar di awal/akhir dokumen
-  const innerMargin = Math.round(DPI * 0.03);  // sisa tipis di titik sambungan
+  const outerMargin = Math.round(dpi * 0.12);  // ~batas wajar di awal/akhir dokumen
+  const innerMargin = Math.round(dpi * 0.03);  // sisa tipis di titik sambungan
 
   return pages.map((canvas, idx) => {
     const { top: contentTop, bottom: contentBottom } = findContentRows(canvas);
@@ -401,7 +410,7 @@ function stitchNatural(pages){
 // Skalakan gambar apa pun (rasio berapapun) supaya PAS di dalam kanvas
 // A4 ukuran cetak (2480x3508px) tanpa distorsi: sisi terpanjang disesuaikan,
 // sisa ruang diisi putih, gambar ditengahkan. Tidak pernah men-stretch.
-function fitToPrintA4(canvas){
+function fitToPrintA4(canvas, A4_W, A4_H){
   if (canvas.width === A4_W && canvas.height === A4_H) return canvas;
 
   const out = document.createElement('canvas');
@@ -422,7 +431,7 @@ function fitToPrintA4(canvas){
   return out;
 }
 
-function composeStacked(pages){
+function composeStacked(pages, A4_W, A4_H, GAP){
   const canvas = document.createElement('canvas');
   canvas.width = A4_W;
   canvas.height = A4_H;
@@ -445,7 +454,7 @@ function composeStacked(pages){
   return canvas;
 }
 
-function composeSideBySide(pages){
+function composeSideBySide(pages, A4_W, A4_H, GAP){
   // Kanvas landscape A4 supaya halaman berdampingan tetap proporsional
   const canvas = document.createElement('canvas');
   canvas.width = A4_H;
