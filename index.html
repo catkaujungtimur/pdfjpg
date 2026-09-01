@@ -60,7 +60,7 @@
   .drop-sub{ font-size:11px; color:var(--ink-soft); }
 
   .dpi-row{
-    display:flex; align-items:center; gap:10px;
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
     margin-top:18px; font-size:11px; color:var(--ink-soft);
   }
   select{
@@ -97,7 +97,7 @@
 </head>
 <body>
   <div class="sheet">
-    <h1>Satukan PDF, <br>jangan lupa sarapan.</h1>
+    <h1>Satukan PDF,<br>Jangan lupa sarapan.</h1>
 
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Pilih atau taruh file PDF">
       <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
@@ -112,6 +112,12 @@
         <option value="300" selected>300 DPI</option>
         <option value="450">450 DPI</option>
         <option value="600">600 DPI</option>
+      </select>
+
+      <span>Mode:</span>
+      <select id="ratioSelect">
+        <option value="a4" selected>A4 (rasio tetap)</option>
+        <option value="bebas">Bebas (rasio asli)</option>
       </select>
     </div>
 
@@ -140,6 +146,15 @@ const dropEl = document.getElementById('drop');
 const fileInput = document.getElementById('fileInput');
 const queueEl = document.getElementById('queue');
 const dpiSelect = document.getElementById('dpiSelect');
+const ratioSelect = document.getElementById('ratioSelect');
+
+// Batas aman ukuran kanvas lintas-browser. Kalau halaman PDF (dikali DPI
+// yang diminta) bakal melebihi ini, DPI efektif diturunkan otomatis supaya
+// tidak menabrak error "Canvas is already in error state" dari browser.
+// Ini HANYA diterapkan di mode Bebas — mode A4 selalu aman karena hasilnya
+// dipatok ke ukuran A4 standar (maksimal 4961x7016 di 600 DPI).
+const MAX_CANVAS_DIMENSION = 8000;
+const MAX_CANVAS_AREA = 45_000_000;
 
 // Menyimpan semua file yang sudah dimasukkan, supaya bisa diproses ulang
 // otomatis kalau resolusi diganti belakangan.
@@ -165,6 +180,10 @@ fileInput.addEventListener('change', e => {
 });
 
 dpiSelect.addEventListener('change', () => {
+  const dpi = parseInt(dpiSelect.value, 10);
+  filesQueue.forEach(entry => processEntry(entry, dpi));
+});
+ratioSelect.addEventListener('change', () => {
   const dpi = parseInt(dpiSelect.value, 10);
   filesQueue.forEach(entry => processEntry(entry, dpi));
 });
@@ -196,15 +215,34 @@ async function processEntry(entry, dpi){
   entry.statusEl.textContent = 'memproses…';
 
   try {
-    const { w: A4_W, h: A4_H } = getA4Size(dpi);
-
     const buf = await entry.file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const ratioMode = ratioSelect.value; // 'a4' atau 'bebas'
+
+    let effectiveDpi = dpi;
+    let dpiNote = '';
+
+    if (ratioMode === 'bebas'){
+      // Cek dulu ukuran halaman (dalam pt) sebelum render, supaya bisa
+      // menurunkan DPI otomatis kalau halamannya jauh lebih besar dari A4
+      // (misal gambar teknis/denah ukuran A2/A1) — mencegah crash kanvas.
+      const pageSizes = [];
+      for (let i = 1; i <= pdf.numPages; i++){
+        const page = await pdf.getPage(i);
+        pageSizes.push({ w: page.view[2] - page.view[0], h: page.view[3] - page.view[1] });
+      }
+      effectiveDpi = computeSafeDpi(pageSizes, dpi);
+      if (Math.round(effectiveDpi) < dpi){
+        dpiNote = ` (diturunkan dari ${dpi}, halaman besar)`;
+      }
+    }
+
+    const { w: A4_W, h: A4_H } = getA4Size(effectiveDpi);
 
     const pageCanvases = [];
     for (let i = 1; i <= pdf.numPages; i++){
       const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: dpi / 72 });
+      const viewport = page.getViewport({ scale: effectiveDpi / 72 });
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
@@ -212,9 +250,9 @@ async function processEntry(entry, dpi){
       pageCanvases.push(canvas);
     }
 
-    const trimmed = trimPages(pageCanvases, dpi);
+    const trimmed = trimPages(pageCanvases, effectiveDpi);
     const natural = stitchNatural(trimmed);
-    const finalCanvas = fitToPrintA4(natural, A4_W, A4_H);
+    const finalCanvas = ratioMode === 'a4' ? fitToPrintA4(natural, A4_W, A4_H) : natural;
 
     const blob = await new Promise(res => finalCanvas.toBlob(res, 'image/png'));
 
@@ -225,15 +263,34 @@ async function processEntry(entry, dpi){
     entry.thumbEl.style.visibility = 'visible';
 
     const outName = entry.file.name.replace(/\.pdf$/i, '') + '.png';
+    const dpiLabel = Math.round(effectiveDpi) + ' DPI' + dpiNote;
     entry.statusEl.innerHTML = `
       <a class="btn" href="${entry.url}" download="${escapeAttr(outName)}">Unduh PNG</a>
-      <span class="item-dpi-tag">${dpi} DPI</span>
+      <span class="item-dpi-tag">${dpiLabel}</span>
     `;
   } catch (err){
     console.error(err);
     entry.statusEl.textContent = 'gagal: ' + (err.message || 'periksa file');
     entry.statusEl.classList.add('error');
   }
+}
+
+// Hitung DPI efektif yang aman untuk seluruh halaman dalam satu file,
+// supaya tidak menabrak batas ukuran kanvas maksimum browser.
+// pageSizes: array {w, h} dalam satuan pt (1/72 inci) per halaman.
+function computeSafeDpi(pageSizes, requestedDpi){
+  let minScale = 1;
+  for (const { w, h } of pageSizes){
+    const pxW = w * requestedDpi / 72;
+    const pxH = h * requestedDpi / 72;
+    let scale = 1;
+    if (pxW > MAX_CANVAS_DIMENSION) scale = Math.min(scale, MAX_CANVAS_DIMENSION / pxW);
+    if (pxH > MAX_CANVAS_DIMENSION) scale = Math.min(scale, MAX_CANVAS_DIMENSION / pxH);
+    const area = pxW * pxH * scale * scale;
+    if (area > MAX_CANVAS_AREA) scale = Math.min(scale, scale * Math.sqrt(MAX_CANVAS_AREA / area));
+    minScale = Math.min(minScale, scale);
+  }
+  return requestedDpi * minScale;
 }
 
 // --- Deteksi & pemotongan spasi kosong ---
