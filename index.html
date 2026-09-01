@@ -97,7 +97,7 @@
 </head>
 <body>
   <div class="sheet">
-    <h1>Satukan PDF,<br>Jangan lupa sarapan.</h1>
+    <h1>Satukan PDF, hilangkan<br>spasi kosong.</h1>
 
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Pilih atau taruh file PDF">
       <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none">
@@ -112,7 +112,10 @@
         <option value="300" selected>300 DPI</option>
         <option value="450">450 DPI</option>
         <option value="600">600 DPI</option>
+        <option value="custom">Kustom (pixel)</option>
       </select>
+      <input type="number" id="customPxInput" placeholder="Lebar px, mis. 2480"
+        min="500" max="12000" style="display:none;width:130px;">
 
       <span>Mode:</span>
       <select id="ratioSelect">
@@ -146,7 +149,33 @@ const dropEl = document.getElementById('drop');
 const fileInput = document.getElementById('fileInput');
 const queueEl = document.getElementById('queue');
 const dpiSelect = document.getElementById('dpiSelect');
+const customPxInput = document.getElementById('customPxInput');
 const ratioSelect = document.getElementById('ratioSelect');
+
+// Ambil DPI yang sedang berlaku. Kalau user pilih "Kustom", DPI dihitung
+// mundur dari lebar pixel yang diminta (untuk sisi 210mm/lebar A4) —
+// karena pixel dan DPI itu cuma dua cara menyebut angka yang sama untuk
+// kertas berukuran tetap: dpi = pixel × 25.4 / 210.
+function getSelectedDpi(){
+  if (dpiSelect.value === 'custom'){
+    let px = parseInt(customPxInput.value, 10);
+    if (!px || px < 300) px = 300;
+    if (px > 12000) px = 12000; // batas wajar, mencegah kanvas kebesaran tanpa sengaja
+    return px * 25.4 / 210;
+  }
+  return parseInt(dpiSelect.value, 10);
+}
+
+dpiSelect.addEventListener('change', () => {
+  customPxInput.style.display = dpiSelect.value === 'custom' ? 'inline-block' : 'none';
+  if (dpiSelect.value === 'custom' && !customPxInput.value){
+    customPxInput.value = 2480; // default masuk akal: setara ~300 DPI A4 (lebar)
+  }
+  filesQueue.forEach(entry => processEntry(entry, getSelectedDpi()));
+});
+customPxInput.addEventListener('change', () => {
+  filesQueue.forEach(entry => processEntry(entry, getSelectedDpi()));
+});
 
 // Batas aman ukuran kanvas lintas-browser. Kalau halaman PDF (dikali DPI
 // yang diminta) bakal melebihi ini, DPI efektif diturunkan otomatis supaya
@@ -179,17 +208,12 @@ fileInput.addEventListener('change', e => {
   fileInput.value = '';
 });
 
-dpiSelect.addEventListener('change', () => {
-  const dpi = parseInt(dpiSelect.value, 10);
-  filesQueue.forEach(entry => processEntry(entry, dpi));
-});
 ratioSelect.addEventListener('change', () => {
-  const dpi = parseInt(dpiSelect.value, 10);
-  filesQueue.forEach(entry => processEntry(entry, dpi));
+  filesQueue.forEach(entry => processEntry(entry, getSelectedDpi()));
 });
 
 function handleFiles(files){
-  const dpi = parseInt(dpiSelect.value, 10);
+  const dpi = getSelectedDpi();
   files.forEach(file => {
     const row = document.createElement('div');
     row.className = 'item';
